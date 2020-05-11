@@ -1,377 +1,140 @@
-port module Main exposing (..)
+module Main exposing (..)
 
+import Base64 exposing (decode, encode)
 import Browser
-import Browser.Dom as Dom
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
-import Html.Keyed as Keyed
-import Html.Lazy exposing (lazy, lazy2)
-import Json.Decode as Json
-import Task
+import Browser.Navigation exposing (Key, pushUrl)
+import Html exposing (Html, div, text, textarea)
+import Html.Attributes exposing (placeholder, value)
+import Html.Events exposing (onInput)
+import Url exposing (Url)
+import Url.Builder exposing (Root(..), custom)
+import Url.Parser exposing (Parser, fragment, parse)
 
 
-main : Program (Maybe Model) Model Msg
+
+-- MAIN
+
+
+main : Program () Model Msg
 main =
-    Browser.document
+    Browser.application
         { init = init
-        , view = \model -> { title = "Rechnung bitte!", body = [ view model ] }
-        , update = updateWithStorage
-        , subscriptions = \_ -> Sub.none
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        , onUrlChange = UrlChanged
+        , onUrlRequest = LinkClicked
         }
 
 
-port setStorage : Model -> Cmd msg
-
-
-{-| We want to `setStorage` on every update. This function adds the setStorage
-command for every step of the update function.
--}
-updateWithStorage : Msg -> Model -> ( Model, Cmd Msg )
-updateWithStorage msg model =
-    let
-        ( newModel, cmds ) =
-            update msg model
-    in
-    ( newModel
-    , Cmd.batch [ setStorage newModel, cmds ]
-    )
+type Msg
+    = LinkClicked Browser.UrlRequest
+    | UrlChanged Url
+    | Change String
 
 
 
 -- MODEL
--- The full application state of our todo app.
 
 
 type alias Model =
-    { entries : List Entry
+    { key : Key
+    , url : Url
+    , content : String
     }
 
 
-type alias Entry =
-    { description : String
-    , price : Int
-    }
+
+-- INIT
 
 
-emptyModel : Model
-emptyModel =
-    { entries = []
-    }
+init : string -> Url -> Key -> ( Model, Cmd Msg )
+init _ url key =
+    ( { key = key, url = url, content = tryDecoding (Maybe.withDefault "" (getContent url)) }, Cmd.none )
 
 
-newEntry : String -> Entry
-newEntry desc =
-    { description = desc
-    , price = 69
-    }
+getContent : Url -> Maybe String
+getContent =
+    parse fragmentParser >> Maybe.andThen identity
 
 
-init : Maybe Model -> ( Model, Cmd Msg )
-init maybeModel =
-    ( Maybe.withDefault emptyModel maybeModel
-    , Cmd.none
-    )
+fragmentParser : Parser (Maybe String -> Maybe String) (Maybe String)
+fragmentParser =
+    fragment identity
+
+
+
+-- SUBSCRIPTION
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Sub.none
 
 
 
 -- UPDATE
 
 
-{-| Users of our app can trigger messages by clicking and typing. These
-messages are fed into the `update` function as they occur, letting us react
-to them.
--}
-type Msg
-    = NoOp
-      -- | UpdateField String
-      -- | EditingEntry Int Bool
-      -- | UpdateEntry Int String
-    | Add String
-
-
-
--- | Delete Int
--- | DeleteComplete
--- | Check Int Bool
--- | CheckAll Bool
--- | ChangeVisibility String
--- How we update our Model on a given Msg?
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NoOp ->
+        Change newContent ->
+            ( { model | content = newContent }, pushUrl model.key (pathForInvoice newContent) )
+
+        LinkClicked _ ->
             ( model, Cmd.none )
 
-        Add str ->
-            ( { model
-                | entries = model.entries ++ [ newEntry str ]
-
-                -- if String.isEmpty model.entries then
-                --     model.entries
-                -- else
-                --     model.entries ++ [ newEntry model.description ]
-              }
-            , Cmd.none
-            )
+        UrlChanged _ ->
+            ( model, Cmd.none )
 
 
 
--- UpdateField str ->
---     ( { model | field = str }
---     , Cmd.none
---     )
--- EditingEntry id isEditing ->
---     let
---         updateEntry t =
---             if t.id == id then
---                 { t | editing = isEditing }
---             else
---                 t
---         focus =
---             Dom.focus ("todo-" ++ String.fromInt id)
---     in
---     ( { model | entries = List.map updateEntry model.entries }
---     , Task.attempt (\_ -> NoOp) focus
---     )
--- UpdateEntry id task ->
---     let
---         updateEntry t =
---             if t.id == id then
---                 { t | description = task }
---             else
---                 t
---     in
---     ( { model | entries = List.map updateEntry model.entries }
---     , Cmd.none
---     )
--- Delete id ->
---     ( { model | entries = List.filter (\t -> t.id /= id) model.entries }
---     , Cmd.none
---     )
--- DeleteComplete ->
---     ( { model | entries = List.filter (not << .completed) model.entries }
---     , Cmd.none
---     )
--- Check id isCompleted ->
---     let
---         updateEntry t =
---             if t.id == id then
---                 { t | completed = isCompleted }
---             else
---                 t
---     in
---     ( { model | entries = List.map updateEntry model.entries }
---     , Cmd.none
---     )
--- VIEW
+-- VIEWs
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    div
-        [ class "todomvc-wrapper"
-
-        -- , style "visibility" "hidden"
-        ]
-        [ section
-            [ class "todoapp" ]
-            -- [ lazy viewInput model.description
-            [ viewEntries model.entries
-            , text "hallo"
-            ]
-
-        -- , lazy2 viewControls model.entries
-        ]
-
-
-
--- , infoFooter
-
-
-viewInput : String -> Html Msg
-viewInput task =
-    header
-        [ class "header" ]
-        [ h1 [] [ text "todos" ]
-        , input
-            [ class "new-todo"
-            , placeholder "What needs to be done?"
-            , autofocus True
-            , value task
-            , name "newTodo"
-
-            -- , onInput UpdateField
-            -- , onEnter Add
-            ]
-            []
-        ]
-
-
-onEnter : Msg -> Attribute Msg
-onEnter msg =
-    let
-        isEnter code =
-            if code == 13 then
-                Json.succeed msg
-
-            else
-                Json.fail "not ENTER"
-    in
-    on "keydown" (Json.andThen isEnter keyCode)
-
-
-
--- VIEW ALL ENTRIES
-
-
-viewEntries : List Entry -> Html Msg
-viewEntries entries =
-    section
-        [ class "main"
-        ]
-        [ Keyed.ul [ class "todo-list" ] <|
-            List.map viewKeyedEntry entries
-        ]
-
-
-
--- VIEW INDIVIDUAL ENTRIES
-
-
-viewKeyedEntry : Entry -> ( String, Html Msg )
-viewKeyedEntry todo =
-    ( todo.description ++ String.fromInt todo.price, lazy viewEntry todo )
-
-
-
--- [ classList [ ( "completed", todo ), ( "editing", todo.editing ) ] ]
-
-
-viewEntry : Entry -> Html Msg
-viewEntry todo =
-    li
-        []
-        [ div
-            [ class "view" ]
-            [ input
-                [ class "toggle"
-                , type_ "checkbox"
-
-                -- , checked todo.completed
-                -- , onClick (Check todo.id (not todo.completed))
-                ]
-                []
-            , label
-                []
-                -- [ onDoubleClick (EditingEntry todo.id True) ]
-                [ text todo.description ]
-            , button
-                [ class "destroy"
-
-                -- , onClick (Delete todo.id)
-                ]
-                []
-            ]
-        , input
-            [ class "edit"
-            , value todo.description
-            , name "title"
-
-            -- , id ("todo-" ++ String.fromInt todo.id)
-            -- , onInput (UpdateEntry todo.id)
-            -- , onBlur (EditingEntry todo.id False)
-            -- , onEnter (EditingEntry todo.id False)
-            ]
-            []
-        ]
-
-
-
--- VIEW CONTROLS AND FOOTER
-
-
-viewControls : String -> List Entry -> Html Msg
-viewControls visibility entries =
-    -- let
-    -- entriesCompleted =
-    --     List.length entries
-    -- in
-    footer
-        [ class "footer"
-        , hidden (List.isEmpty entries)
-        ]
-        []
-
-
-
--- , lazy viewControlsFilters visibility
--- , lazy viewControlsClear entriesCompleted
-
-
-viewControlsCount : Int -> Html Msg
-viewControlsCount entriesLeft =
-    let
-        item_ =
-            if entriesLeft == 1 then
-                " item"
-
-            else
-                " items"
-    in
-    span
-        [ class "todo-count" ]
-        [ strong [] [ text (String.fromInt entriesLeft) ]
-        , text (item_ ++ " left")
-        ]
-
-
-viewControlsFilters : String -> Html Msg
-viewControlsFilters visibility =
-    ul
-        [ class "filters" ]
-        [ visibilitySwap "#/" "All" visibility
-        , text " "
-        , visibilitySwap "#/active" "Active" visibility
-        , text " "
-        , visibilitySwap "#/completed" "Completed" visibility
-        ]
-
-
-visibilitySwap : String -> String -> String -> Html Msg
-visibilitySwap uri visibility actualVisibility =
-    li
-        []
-        -- [ onClick (ChangeVisibility visibility) ]
-        [ a [ href uri, classList [ ( "selected", visibility == actualVisibility ) ] ]
-            [ text visibility ]
-        ]
-
-
-viewControlsClear : Int -> Html Msg
-viewControlsClear entriesCompleted =
-    button
-        [ class "clear-completed"
-        , hidden (entriesCompleted == 0)
-
-        -- , onClick DeleteComplete
-        ]
-        [-- [ text ("Clear completed (" ++ String.fromInt entriesCompleted ++ ")")
-        ]
-
-
-infoFooter : Html msg
-infoFooter =
-    footer [ class "info" ]
-        [ p [] [ text "Double-click to edit a todo" ]
-        , p []
-            [ text "Written by "
-            , a [ href "https://github.com/evancz" ] [ text "Evan Czaplicki" ]
-            ]
-        , p []
-            [ text "Part of "
-            , a [ href "http://todomvc.com" ] [ text "TodoMVC" ]
+    { title = "Die Rechnung bitte!"
+    , body =
+        [ text (Url.toString model.url)
+        , div []
+            [ textarea [ placeholder "Text", value model.content, onInput Change ] []
+            , div [] (viewItems model.content)
             ]
         ]
+    }
+
+
+viewItems : String -> List (Html Msg)
+viewItems allItems =
+    List.map viewItem (String.lines allItems)
+
+
+viewItem : String -> Html Msg
+viewItem item =
+    div [] [ text item ]
+
+
+
+-- HELPER
+
+
+tryDecoding : String -> String
+tryDecoding result =
+    case decode result of
+        Err _ ->
+            "can't decode"
+
+        Ok decoded ->
+            decoded
+
+
+encoding : String -> String
+encoding toEncode =
+    encode toEncode
+
+
+pathForInvoice : String -> String
+pathForInvoice asInvoice =
+    custom Absolute [] [] (Just (encode asInvoice))

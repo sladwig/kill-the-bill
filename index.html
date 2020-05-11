@@ -2,19 +2,17 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Rechnung bitte!</title>
-    <script type="text/javascript" src="rechnung.js"></script>
-    <link rel="stylesheet" href="style/style.css" />
+    <title>Die Rechnung bitte!</title>
+    <script type="text/javascript" src="/rechnung.js"></script>
+    <link rel="stylesheet" href="/rechnung.css" />
+    <link rel="stylesheet" href="https://unpkg.com/mvp.css" />
   </head>
 
-  <body></body>
+  <body id="rechnung"></body>
 
   <script type="text/javascript">
-    var storedState = localStorage.getItem("elm-todo-save");
-    var startingState = storedState ? JSON.parse(storedState) : null;
-    var app = Elm.Main.init({ flags: startingState });
-    app.ports.setStorage.subscribe(function(state) {
-      localStorage.setItem("elm-todo-save", JSON.stringify(state));
+    var app = Elm.Main.init({
+      node: document.getElementById("rechnung"),
     });
   </script>
 </html>
