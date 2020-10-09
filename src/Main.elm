@@ -1,9 +1,9 @@
-module Main exposing (..)
+module Main exposing (Model, Msg)
 
 import Base64 exposing (decode, encode)
 import Browser
 import Browser.Navigation exposing (Key, pushUrl)
-import Html exposing (Html, b, br, div, span, table, td, text, textarea, tr)
+import Html exposing (Html, b, br, div, table, td, text, textarea, tr)
 import Html.Attributes exposing (class, cols, colspan, placeholder, rows, value)
 import Html.Events exposing (onInput)
 import String.Extra exposing (leftOfBack, rightOfBack)
@@ -13,8 +13,6 @@ import Url.Parser exposing (Parser, fragment, parse)
 -- import Round 
 import FormatNumber exposing (format)
 import FormatNumber.Locales exposing (Locale, spanishLocale, Decimals(..))
-
-import Debug exposing (log)
 
 -- MAIN
 
@@ -225,7 +223,7 @@ totalLine line =
 -- try to convert to money and leave as is, if conversion fails
 moneyMaker : String -> String
 moneyMaker value = 
-    case (asFloat value) of
+    case asFloat value of
         Just money -> currencyfy money
         Nothing -> value
 -- Basics.abs    Maybe.withDefault value (currencyfy (asFloat value))
@@ -233,11 +231,11 @@ moneyMaker value =
 
 currencyfy : Float -> String
 currencyfy value =
-    (format numberArtist value) ++ " €"
+    format numberArtist value ++ " €"
 
 asFloat : String -> Maybe Float
 asFloat value =
-     (String.toFloat (String.replace "," "." value))
+    String.toFloat (String.replace "," "." value)
 
 
 -- heading
